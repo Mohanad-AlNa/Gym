@@ -142,6 +142,7 @@
     .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     .modal-head h3 { margin: 0; }
     .modal-footer { display: flex; justify-content: flex-start; gap: 9px; margin-top: 20px; }
+    .confirm-message { margin: 0; color: var(--muted); line-height: 1.9; }
     .hidden { display: none !important; }
     @media (max-width: 850px) {
       .app-shell { display: block; }
@@ -349,8 +350,11 @@
       }));
       list.querySelectorAll("[data-remove-exercise]").forEach(button => button.addEventListener("click", () => {
         const exercise = currentWorkout.exercises.find(item => item.id === button.dataset.removeExercise);
-        if (!exercise || !confirm(`هل تريد حذف تمرين "${exercise.name}" من تمرين اليوم؟`)) return;
-        currentWorkout.exercises = currentWorkout.exercises.filter(item => item.id !== button.dataset.removeExercise); autoSaveWorkout(); renderExercises(); renderStats();
+        if (!exercise) return;
+        requestDelete(`هل تريد حذف تمرين "${exercise.name}" من تمرين اليوم؟`, () => {
+          currentWorkout.exercises = currentWorkout.exercises.filter(item => item.id !== button.dataset.removeExercise);
+          autoSaveWorkout(); renderExercises(); renderStats();
+        });
       }));
     }
     function renderStats() {
@@ -394,8 +398,9 @@
       }).join("");
       target.querySelectorAll("[data-toggle-history]").forEach(button => button.addEventListener("click", () => document.getElementById("details-" + button.dataset.toggleHistory).classList.toggle("open")));
       target.querySelectorAll("[data-delete-history]").forEach(button => button.addEventListener("click", () => {
-        if (!confirm("هل تريد حذف هذا اليوم من السجل؟")) return;
-        state.history = state.history.filter(item => item.id !== button.dataset.deleteHistory); persist(); render();
+        requestDelete("هل تريد حذف هذا اليوم من سجل التمارين؟", () => {
+          state.history = state.history.filter(item => item.id !== button.dataset.deleteHistory); persist(); render();
+        });
       }));
     }
     function getHistoryProgress(item) {
@@ -415,10 +420,12 @@
       target.querySelectorAll("[data-edit-routine]").forEach(button => button.addEventListener("click", () => openRoutineModal(button.dataset.editRoutine)));
       target.querySelectorAll("[data-delete-routine]").forEach(button => button.addEventListener("click", () => {
         if (state.routines.length === 1) return showToast("يجب إبقاء خطة واحدة على الأقل");
-        if (!confirm("حذف الخطة وكل تمارينها؟")) return;
-        state.routines = state.routines.filter(item => item.id !== button.dataset.deleteRoutine);
-        if (currentWorkout.routineId === button.dataset.deleteRoutine) { currentWorkout = freshWorkout(); currentWorkout.routineId = state.routines[0].id; }
-        persist(); render(); showToast("تم حذف الخطة");
+        const routine = state.routines.find(item => item.id === button.dataset.deleteRoutine);
+        requestDelete(`سيتم حذف خطة "${routine?.name || ""}" وجميع تمارينها. هل تريد المتابعة؟`, () => {
+          state.routines = state.routines.filter(item => item.id !== button.dataset.deleteRoutine);
+          if (currentWorkout.routineId === button.dataset.deleteRoutine) { currentWorkout = freshWorkout(); currentWorkout.routineId = state.routines[0].id; }
+          persist(); render(); showToast("تم حذف الخطة");
+        });
       }));
     }
     function openRoutineModal(id = null) {
@@ -433,6 +440,8 @@
         persist(); closeModal(); render(); showToast(id ? "تم تعديل الخطة" : "تمت إضافة الخطة");
       };
       document.getElementById("modal-title").textContent = id ? "تعديل الخطة" : "إضافة خطة جديدة";
+      document.getElementById("modal-save").textContent = "حفظ";
+      document.getElementById("modal-save").className = "btn btn-primary";
       document.getElementById("modal-content").innerHTML = `<div class="form-grid">
         <div class="field"><label>اسم الخطة</label><input id="routine-name" class="text-input" placeholder="مثال: Push" value="${escapeHTML(routine.name)}"></div>
         <div class="field"><label>وصف مختصر</label><input id="routine-subtitle" class="text-input" placeholder="صدر · كتف · ترايسبس" value="${escapeHTML(routine.subtitle)}"></div>
@@ -441,6 +450,15 @@
       setTimeout(() => document.getElementById("routine-name").focus(), 0);
     }
     function closeModal() { document.getElementById("modal-backdrop").classList.remove("open"); modalAction = null; }
+    function requestDelete(message, action) {
+      modalAction = () => { action(); closeModal(); };
+      document.getElementById("modal-title").textContent = "تأكيد الحذف";
+      document.getElementById("modal-content").innerHTML = `<p class="confirm-message">${escapeHTML(message)}</p>`;
+      document.getElementById("modal-save").textContent = "تأكيد الحذف";
+      document.getElementById("modal-save").className = "btn btn-danger";
+      document.getElementById("modal-cancel").textContent = "إلغاء";
+      document.getElementById("modal-backdrop").classList.add("open");
+    }
     function autoSaveWorkout() {
       const filled = currentWorkout.exercises.map(ex => ({ ...ex, sets: ex.sets.filter(set => set.reps || set.weight) })).filter(ex => ex.sets.length);
       state.draft = currentWorkout;
@@ -468,8 +486,10 @@
     document.getElementById("modal-close").addEventListener("click", closeModal);
     document.getElementById("modal-backdrop").addEventListener("click", event => { if (event.target.id === "modal-backdrop") closeModal(); });
     document.getElementById("clear-history-btn").addEventListener("click", () => {
-      if (!state.history.length || !confirm("هل تريد مسح سجل التمارين كاملًا؟")) return;
-      state.history = []; persist(); render(); showToast("تم مسح السجل");
+      if (!state.history.length) return;
+      requestDelete("سيتم حذف سجل التمارين بالكامل. هل تريد المتابعة؟", () => {
+        state.history = []; persist(); render(); showToast("تم مسح السجل");
+      });
     });
     document.getElementById("export-btn").addEventListener("click", () => {
       document.getElementById("backup-data").value = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), ...state }, null, 2);
