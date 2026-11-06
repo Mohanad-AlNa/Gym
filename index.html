@@ -348,6 +348,8 @@
         exercise.sets.splice(Number(button.dataset.index), 1); autoSaveWorkout(); renderExercises(); renderStats();
       }));
       list.querySelectorAll("[data-remove-exercise]").forEach(button => button.addEventListener("click", () => {
+        const exercise = currentWorkout.exercises.find(item => item.id === button.dataset.removeExercise);
+        if (!exercise || !confirm(`هل تريد حذف تمرين "${exercise.name}" من تمرين اليوم؟`)) return;
         currentWorkout.exercises = currentWorkout.exercises.filter(item => item.id !== button.dataset.removeExercise); autoSaveWorkout(); renderExercises(); renderStats();
       }));
     }
