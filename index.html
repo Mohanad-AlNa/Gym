@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f5f7f2">
-  <title>My Training | سجل التمارين</title>
+  <meta name="theme-color" content="#111827">
+  <title>رفيق النادي | سجل التمارين</title>
   <style>
     :root {
       --bg: #f4f7fb;
@@ -163,41 +163,6 @@
       .history-summary { align-items: flex-start; }
     }
 
-    /* My Training theme: the original theme remains available via the toggle. */
-    body.theme-new {
-      --bg: #f5f7f2;
-      --surface: #ffffff;
-      --surface-soft: #f8faf6;
-      --text: #26332d;
-      --muted: #78857d;
-      --line: #e5ebe3;
-      --primary: #2f8061;
-      --primary-dark: #24654c;
-      --shadow: 0 12px 32px rgba(49, 77, 60, .07);
-    }
-    body.theme-new .sidebar {
-      background: #20352c;
-      color: #dcebe1;
-    }
-    body.theme-new .brand-mark {
-      background: #dcefe4;
-      color: #2f8061;
-      box-shadow: none;
-    }
-    body.theme-new .brand strong { color: #f5fff8; }
-    body.theme-new .brand small, body.theme-new .sidebar-footer { color: #a9c5b3; }
-    body.theme-new .nav button { color: #b7cfc0; }
-    body.theme-new .nav button:hover, body.theme-new .nav button.active { background: #315343; color: #fff; }
-    body.theme-new .nav button.active { box-shadow: inset -3px 0 #9ad4b2; }
-    body.theme-new .stat-icon { background: #e5f3e9; color: var(--primary); }
-    body.theme-new .btn-soft { background: #e4f2e8; color: var(--primary-dark); }
-    body.theme-new .routine-tab.active { background: #e9f5ed; border-color: #9ac9aa; }
-    body.theme-new .routine-tab.active strong { color: var(--primary-dark); }
-    body.theme-new .exercise-number { background: #e2f1e7; color: var(--primary-dark); }
-    body.theme-new .number-input:focus, body.theme-new .text-input:focus, body.theme-new textarea:focus { box-shadow: 0 0 0 3px rgba(47,128,97,.12); }
-    body.theme-new .number-input::placeholder { color: #c9d4cd; }
-    .theme-toggle { width: 100%; margin-top: auto; }
-    @media (max-width: 850px) { .theme-toggle { width: auto; margin-top: 0; } }
   </style>
 </head>
 <body>
@@ -205,7 +170,7 @@
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">⚡</div>
-        <div><strong>My Training</strong><small>سجّل تقدمك، كل يوم</small></div>
+        <div><strong>رفيق النادي</strong><small>BY:Mohanad Al-Na</small></div>
       </div>
       <nav class="nav" aria-label="القائمة الرئيسية">
         <button class="active" data-section="workout">🏋️ التمرين الحالي</button>
@@ -213,7 +178,6 @@
         <button data-section="manage">⚙️ إدارة الخطط</button>
         <button data-section="backup">💾 النسخ الاحتياطي</button>
       </nav>
-      <button class="btn btn-soft theme-toggle" id="theme-toggle">🎨 التنسيق الحالي</button>
       <div class="sidebar-footer">بياناتك محفوظة محليًا في هذا المتصفح.<br>لا يتم إرسال أي شيء إلى الإنترنت.</div>
     </aside>
 
@@ -286,7 +250,6 @@
 
   <script>
     const STORAGE_KEY = "gym_companion_ar_v1";
-    const THEME_KEY = "my_training_theme";
     const defaultRoutines = [
       { id: "push", name: "Push", subtitle: "صدر · كتف · ترايسبس", exercises: ["ضغط صدر بالبار", "ضغط صدر مائل", "رفرفة جانبية", "تمديد ترايسبس"] },
       { id: "pull", name: "Pull", subtitle: "ظهر · بايسبس", exercises: ["سحب أمامي", "تجديف بالبار", "سحب كيبل", "بايسبس بالدمبل"] },
@@ -322,11 +285,6 @@
     function showToast(message) {
       const toast = document.getElementById("toast"); toast.textContent = message; toast.classList.add("show");
       clearTimeout(showToast.timer); showToast.timer = setTimeout(() => toast.classList.remove("show"), 2600);
-    }
-    function applyTheme(theme = localStorage.getItem(THEME_KEY) || "new") {
-      const isNew = theme === "new";
-      document.body.classList.toggle("theme-new", isNew);
-      document.getElementById("theme-toggle").textContent = isNew ? "🎨 التنسيق الجديد" : "↩ العودة للتنسيق السابق";
     }
 
     function render() {
@@ -530,13 +488,6 @@
       try { await navigator.clipboard.writeText(field.value); showToast("تم نسخ البيانات"); }
       catch (error) { field.select(); document.execCommand("copy"); showToast("تم نسخ البيانات"); }
     });
-    document.getElementById("theme-toggle").addEventListener("click", () => {
-      const nextTheme = document.body.classList.contains("theme-new") ? "old" : "new";
-      localStorage.setItem(THEME_KEY, nextTheme);
-      applyTheme(nextTheme);
-      showToast(nextTheme === "new" ? "تم تفعيل تنسيق My Training" : "تمت العودة للتنسيق السابق");
-    });
-    applyTheme();
     render();
   </script>
 </body>
