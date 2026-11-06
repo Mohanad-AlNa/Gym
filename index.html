@@ -112,6 +112,7 @@
       width: 100%; min-width: 70px; border: 1px solid var(--line); background: white; border-radius: 8px;
       padding: 7px 9px; outline: none; color: var(--text);
     }
+    .number-input::placeholder { color: #c3cad6; opacity: 1; }
     .number-input:focus, .text-input:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(99,91,255,.1); }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
     .field { display: grid; gap: 6px; }
@@ -187,7 +188,7 @@
         </div>
         <div class="top-actions">
           <button class="btn btn-soft" id="new-workout-btn">＋ بدء تمرين جديد</button>
-          <button class="btn btn-primary" id="save-workout-btn">حفظ التمرين ✓</button>
+          <button class="btn btn-primary" id="save-workout-btn">إنهاء التمرين ✓</button>
         </div>
       </div>
 
@@ -196,11 +197,11 @@
           <div class="stat"><div class="stat-icon">📅</div><div><strong id="stat-days">0</strong><span>أيام مسجلة</span></div></div>
           <div class="stat"><div class="stat-icon">🏋️</div><div><strong id="stat-exercises">0</strong><span>تمارين اليوم</span></div></div>
           <div class="stat"><div class="stat-icon">🔁</div><div><strong id="stat-sets">0</strong><span>جولات اليوم</span></div></div>
-          <div class="stat"><div class="stat-icon">⚖️</div><div><strong id="stat-volume">0</strong><span>إجمالي كجم</span></div></div>
+          <div class="stat"><div class="stat-icon">📈</div><div><strong id="stat-progress">—</strong><span>مستوى التقدم</span></div></div>
         </div>
         <div class="card">
           <div class="section-heading">
-            <div><h2>اختر نوع التمرين</h2><p>اختر الخطة التي ستتمرن عليها اليوم</p></div>
+            <div><h2>اختر نوع التمرين</h2><p>اختر الخطة التي ستتمرن عليها اليوم · الحفظ تلقائي</p></div>
             <input id="workout-date" class="text-input" type="date" style="width:auto">
           </div>
           <div id="routine-tabs" class="routine-tabs"></div>
@@ -256,7 +257,8 @@
     ];
     const freshWorkout = () => ({ date: todayISO(), routineId: "push", exercises: [] });
     let state = loadState();
-    let currentWorkout = freshWorkout();
+    let currentWorkout = state.draft || freshWorkout();
+    if (!state.routines.some(routine => routine.id === currentWorkout.routineId)) currentWorkout.routineId = state.routines[0]?.id || "";
     let activeSection = "workout";
     let modalAction = null;
 
@@ -270,7 +272,9 @@
     function persist() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
     function todayISO() { return new Date().toISOString().slice(0, 10); }
     function formatDate(date) {
-      return new Intl.DateTimeFormat("ar-SA", { weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date(date + "T12:00:00"));
+      if (!date) return "";
+      const [year, month, day] = date.split("-");
+      return `${day}/${month}/${year}`;
     }
     function getRoutine() { return state.routines.find(r => r.id === currentWorkout.routineId) || state.routines[0]; }
     function escapeHTML(value) {
@@ -295,7 +299,9 @@
           <strong>${escapeHTML(r.name)}</strong><small>${escapeHTML(r.subtitle || `${r.exercises.length} تمارين`)}</small>
         </button>`).join("") : `<div class="empty">أضف خطة تمرين من قسم إدارة الخطط.</div>`;
       document.querySelectorAll("[data-routine]").forEach(button => button.addEventListener("click", () => {
-        currentWorkout.routineId = button.dataset.routine; currentWorkout.exercises = []; render();
+        autoSaveWorkout();
+        currentWorkout = { date: todayISO(), routineId: button.dataset.routine, exercises: [] };
+        state.draft = currentWorkout; persist(); render();
       }));
     }
     function renderExercises() {
@@ -321,8 +327,8 @@
             <tbody>${exercise.sets.map((set, setIndex) => `
               <tr>
                 <td>${setIndex + 1}</td>
-                <td><input class="number-input" type="number" min="0" step="1" inputmode="numeric" placeholder="12" value="${escapeHTML(set.reps)}" data-set="${exercise.id}" data-key="reps" data-index="${setIndex}"></td>
-                <td><input class="number-input" type="number" min="0" step="0.5" inputmode="decimal" placeholder="20" value="${escapeHTML(set.weight)}" data-set="${exercise.id}" data-key="weight" data-index="${setIndex}"></td>
+                <td><input class="number-input" type="number" min="0" step="1" inputmode="numeric" placeholder="العدات" value="${escapeHTML(set.reps)}" data-set="${exercise.id}" data-key="reps" data-index="${setIndex}"></td>
+                <td><input class="number-input" type="number" min="0" step="0.5" inputmode="decimal" placeholder="Kg" value="${escapeHTML(set.weight)}" data-set="${exercise.id}" data-key="weight" data-index="${setIndex}"></td>
                 <td><button class="icon-btn" title="حذف الجولة" data-remove-set="${exercise.id}" data-index="${setIndex}">✕</button></td>
               </tr>`).join("")}</tbody>
           </table>
@@ -330,38 +336,56 @@
       list.querySelectorAll("[data-set]").forEach(input => input.addEventListener("input", event => {
         const exercise = currentWorkout.exercises.find(item => item.id === event.target.dataset.set);
         exercise.sets[Number(event.target.dataset.index)][event.target.dataset.key] = event.target.value;
-        renderStats();
+        autoSaveWorkout(); renderStats();
       }));
       list.querySelectorAll("[data-add-set]").forEach(button => button.addEventListener("click", () => {
-        currentWorkout.exercises.find(item => item.id === button.dataset.addSet).sets.push({ reps: "", weight: "" }); renderExercises(); renderStats();
+        currentWorkout.exercises.find(item => item.id === button.dataset.addSet).sets.push({ reps: "", weight: "" }); autoSaveWorkout(); renderExercises(); renderStats();
       }));
       list.querySelectorAll("[data-remove-set]").forEach(button => button.addEventListener("click", () => {
         const exercise = currentWorkout.exercises.find(item => item.id === button.dataset.removeSet);
         if (exercise.sets.length === 1) return showToast("يجب إبقاء جولة واحدة على الأقل");
-        exercise.sets.splice(Number(button.dataset.index), 1); renderExercises(); renderStats();
+        exercise.sets.splice(Number(button.dataset.index), 1); autoSaveWorkout(); renderExercises(); renderStats();
       }));
       list.querySelectorAll("[data-remove-exercise]").forEach(button => button.addEventListener("click", () => {
-        currentWorkout.exercises = currentWorkout.exercises.filter(item => item.id !== button.dataset.removeExercise); renderExercises(); renderStats();
+        currentWorkout.exercises = currentWorkout.exercises.filter(item => item.id !== button.dataset.removeExercise); autoSaveWorkout(); renderExercises(); renderStats();
       }));
     }
     function renderStats() {
       const filledExercises = currentWorkout.exercises.filter(exercise => exercise.sets.some(set => set.reps || set.weight));
       const sets = currentWorkout.exercises.reduce((total, exercise) => total + exercise.sets.filter(set => set.reps || set.weight).length, 0);
-      const volume = currentWorkout.exercises.reduce((total, exercise) => total + exercise.sets.reduce((sum, set) => sum + (Number(set.reps) || 0) * (Number(set.weight) || 0), 0), 0);
       document.getElementById("stat-days").textContent = state.history.length;
       document.getElementById("stat-exercises").textContent = filledExercises.length;
       document.getElementById("stat-sets").textContent = sets;
-      document.getElementById("stat-volume").textContent = Number(volume.toFixed(1)).toLocaleString("ar");
+      document.getElementById("stat-progress").textContent = getProgressLabel();
+    }
+    function workoutScore(workout) {
+      return workout.exercises.reduce((total, exercise) => total + exercise.sets.reduce((sum, set) => {
+        const reps = Number(set.reps) || 0;
+        const weight = Number(set.weight) || 0;
+        if (!reps && !weight) return sum;
+        return sum + reps + (weight * 0.5) + 5;
+      }, 0), 0);
+    }
+    function getProgressLabel() {
+      const currentScore = workoutScore({ exercises: currentWorkout.exercises });
+      if (!currentScore) return "ابدأ";
+      const previous = state.history
+        .filter(item => item.routineId === currentWorkout.routineId && item.date < currentWorkout.date)
+        .sort((a, b) => b.date.localeCompare(a.date))[0];
+      if (!previous) return "أول تسجيل";
+      const difference = currentScore - workoutScore(previous);
+      if (difference > 2) return "متقدم";
+      if (difference < -2) return "أقل";
+      return "متحسن";
     }
     function renderHistory() {
       const target = document.getElementById("history-list");
       if (!state.history.length) { target.innerHTML = `<div class="empty"><strong>لا يوجد سجل بعد</strong>احفظ أول تمرين لك وسيظهر هنا.</div>`; return; }
       target.innerHTML = [...state.history].sort((a, b) => b.date.localeCompare(a.date)).map(item => {
         const totalSets = item.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
-        const volume = item.exercises.reduce((sum, ex) => sum + ex.sets.reduce((s, set) => s + (Number(set.reps) || 0) * (Number(set.weight) || 0), 0), 0);
         return `<article class="history-item">
           <div class="history-summary"><div><strong>${escapeHTML(item.routineName)}</strong><small>${formatDate(item.date)}</small></div><div class="top-actions"><button class="btn btn-ghost btn-sm" data-toggle-history="${item.id}">عرض التفاصيل</button><button class="btn btn-danger btn-sm" data-delete-history="${item.id}">حذف</button></div></div>
-          <div class="history-meta"><span>🏋️ ${item.exercises.length} تمارين</span><span>🔁 ${totalSets} جولات</span><span>⚖️ ${Number(volume.toFixed(1)).toLocaleString("ar")} كجم</span></div>
+          <div class="history-meta"><span>🏋️ ${item.exercises.length} تمارين</span><span>🔁 ${totalSets} جولات</span><span>📈 ${getHistoryProgress(item)}</span></div>
           <div class="history-details" id="details-${item.id}">${item.exercises.map(ex => `<div class="history-exercise"><strong>${escapeHTML(ex.name)}</strong><span>${ex.sets.map(set => `${set.reps || 0} عدة × ${set.weight || 0} كجم`).join(" · ")}</span></div>`).join("")}</div>
         </article>`;
       }).join("");
@@ -370,6 +394,14 @@
         if (!confirm("هل تريد حذف هذا اليوم من السجل؟")) return;
         state.history = state.history.filter(item => item.id !== button.dataset.deleteHistory); persist(); render();
       }));
+    }
+    function getHistoryProgress(item) {
+      const previous = state.history
+        .filter(other => other.routineId === item.routineId && other.date < item.date)
+        .sort((a, b) => b.date.localeCompare(a.date))[0];
+      if (!previous) return "أول تسجيل";
+      const difference = workoutScore(item) - workoutScore(previous);
+      return difference > 2 ? "متقدم" : difference < -2 ? "أقل" : "متحسن";
     }
     function renderManage() {
       const target = document.getElementById("manage-list");
@@ -406,18 +438,27 @@
       setTimeout(() => document.getElementById("routine-name").focus(), 0);
     }
     function closeModal() { document.getElementById("modal-backdrop").classList.remove("open"); modalAction = null; }
-    function saveWorkout() {
+    function autoSaveWorkout() {
       const filled = currentWorkout.exercises.map(ex => ({ ...ex, sets: ex.sets.filter(set => set.reps || set.weight) })).filter(ex => ex.sets.length);
-      if (!filled.length) return showToast("أدخل بيانات جولة واحدة على الأقل قبل الحفظ");
+      state.draft = currentWorkout;
+      if (!filled.length) { persist(); return; }
       const routine = getRoutine();
       state.history = state.history.filter(item => !(item.date === currentWorkout.date && item.routineId === currentWorkout.routineId));
       state.history.push({ ...currentWorkout, id: uid("workout"), routineId: routine.id, routineName: routine.name, exercises: filled });
-      persist(); render(); activeSection = "history"; render(); showToast("تم حفظ التمرين في السجل");
+      persist();
+    }
+    function finishWorkout() {
+      autoSaveWorkout();
+      activeSection = "history";
+      render();
+      showToast("تم إنهاء التمرين، وجميع البيانات محفوظة تلقائيًا");
     }
     document.querySelectorAll(".nav button").forEach(button => button.addEventListener("click", () => { activeSection = button.dataset.section; render(); }));
-    document.getElementById("workout-date").addEventListener("change", event => { currentWorkout.date = event.target.value; render(); });
-    document.getElementById("save-workout-btn").addEventListener("click", saveWorkout);
-    document.getElementById("new-workout-btn").addEventListener("click", () => { currentWorkout = freshWorkout(); render(); showToast("بدأنا تمرينًا جديدًا"); });
+    document.getElementById("workout-date").addEventListener("change", event => { currentWorkout.date = event.target.value; autoSaveWorkout(); render(); });
+    document.getElementById("save-workout-btn").addEventListener("click", finishWorkout);
+    document.getElementById("new-workout-btn").addEventListener("click", () => {
+      autoSaveWorkout(); currentWorkout = freshWorkout(); state.draft = currentWorkout; persist(); render(); showToast("بدأ تمرين جديد، والتمرين السابق محفوظ");
+    });
     document.getElementById("add-routine-btn").addEventListener("click", () => openRoutineModal());
     document.getElementById("modal-save").addEventListener("click", () => modalAction && modalAction());
     document.getElementById("modal-cancel").addEventListener("click", closeModal);
@@ -435,7 +476,9 @@
       try {
         const imported = JSON.parse(document.getElementById("backup-data").value);
         if (!Array.isArray(imported.routines) || !Array.isArray(imported.history)) throw new Error("invalid");
-        state = { routines: imported.routines, history: imported.history }; persist(); currentWorkout = freshWorkout(); currentWorkout.routineId = state.routines[0]?.id || ""; render(); showToast("تم استيراد البيانات بنجاح");
+        state = { routines: imported.routines, history: imported.history, draft: imported.draft }; persist();
+        currentWorkout = state.draft || freshWorkout(); currentWorkout.routineId = currentWorkout.routineId || state.routines[0]?.id || "";
+        render(); showToast("تم استيراد البيانات بنجاح");
       } catch (error) { showToast("النص غير صالح أو ناقص"); }
     });
     document.getElementById("copy-btn").addEventListener("click", async () => {
